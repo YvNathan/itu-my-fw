@@ -47,7 +47,7 @@ public class Scanner {
                 String simpleName = file.getName().substring(0, file.getName().length() - ".class".length()); 
                 String className = joinPackage(packageName, simpleName);
 
-                Class<?> clazz = Class.forName(className, false, classLoader);
+                Class<?> clazz = classLoader.loadClass(className);
 
                 if (clazz.isAnnotationPresent(Controller.class)) {
                     classes.add(clazz);
