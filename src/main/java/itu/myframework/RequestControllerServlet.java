@@ -2,9 +2,14 @@ package itu.myframework;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
 
+import itu.myframework.annotation.Controller;
+import itu.myframework.annotation.URL;
 import itu.myframework.util.Scanner;
+import itu.myframework.util.URLMapping;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -12,7 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 public class RequestControllerServlet extends HttpServlet {
-    private List<Class<?>> controllers;
+    private HashMap<String, URLMapping> mappings;
 
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
@@ -24,7 +29,19 @@ public class RequestControllerServlet extends HttpServlet {
         }
 
         try {
-            controllers = Scanner.getClasses(packageName);
+            mappings = new HashMap<>();
+
+            List<Class<?>> controllers = Scanner.getAnnotatedClasses(packageName, Controller.class);
+            
+            for (Class<?> ctrl : controllers) {
+                List<Method> annotatedMethods = Scanner.findAnnotatedMethods(ctrl, URL.class);
+
+                for (Method method : annotatedMethods) {
+                    URL urlAnnotation = method.getAnnotation(URL.class);
+
+                    mappings.put(urlAnnotation.value(), new URLMapping(ctrl, method));
+                }
+            }
         } catch (Exception e) {
             throw new ServletException("Impossible de scanner le package");
         }
@@ -41,9 +58,22 @@ public class RequestControllerServlet extends HttpServlet {
     private void processRequest(HttpServletRequest req, HttpServletResponse res) throws IOException {
         res.setContentType("text/plain");
         PrintWriter printer = res.getWriter();
+        
+        String contextPath = req.getContextPath();
 
-        for (Class<?> ctrl : controllers) {
-            printer.println(ctrl.getName());
+        String url = req.getRequestURI().substring(contextPath.length());
+
+        URLMapping urlmap = mappings.get(url);
+
+        if (urlmap != null) {
+            printer.println("\"" + url + "\"" + " : url associé à la méthode " + urlmap.getAnnotatedMethod().getName() + " de la classe " + urlmap.getTargetClass().getSimpleName());
+        } else {
+            for (String handledUrl : mappings.keySet()) {
+                URLMapping map = mappings.get(handledUrl);
+                
+                printer.println("Voici les urls qui sont gérés :");
+                printer.println("\"" + handledUrl + "\"" + " pour la méthode " + map.getAnnotatedMethod().getName() + " de la classe " + map.getTargetClass().getSimpleName());
+            }
         }
     }
 
