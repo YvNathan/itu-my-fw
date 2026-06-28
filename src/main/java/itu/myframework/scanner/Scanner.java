@@ -1,4 +1,4 @@
-package itu.myframework.util;
+package itu.myframework.scanner;
 
 import java.io.File;
 import java.lang.annotation.Annotation;
@@ -6,7 +6,13 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+
+import itu.myframework.annotation.Controller;
+import itu.myframework.routing.MethodMapping;
+import itu.myframework.routing.RequestMethod;
+import itu.myframework.routing.URLMethod;
 
 public class Scanner {
     public static List<Class<?>> getAnnotatedClasses(Class<? extends Annotation> annotationClass) throws Exception {
@@ -72,6 +78,31 @@ public class Scanner {
         }
 
         return methods;
+    }
+
+    public static HashMap<URLMethod, MethodMapping> getMappings(String packageName) throws Exception {
+        HashMap<URLMethod, MethodMapping> mappings = new HashMap<>();
+        List<Class<?>> controllers = getAnnotatedClasses(packageName, Controller.class);
+
+        for (Class<?> ctrl : controllers) {
+            List<Method> annotatedMethods = findAnnotatedMethods(ctrl, itu.myframework.annotation.URL.class);
+
+            for (Method method : annotatedMethods) {
+                itu.myframework.annotation.URL urlAnnotation = method.getAnnotation(itu.myframework.annotation.URL.class);
+
+                String urlValue = urlAnnotation.value();
+                RequestMethod requestMethod = urlAnnotation.requestMethod();
+                URLMethod urlMethod = new URLMethod(urlValue, requestMethod);
+
+                if (mappings.containsKey(urlMethod)) {
+                    throw new Exception("Duplicate mapping: " + requestMethod + " " + urlValue);
+                }
+
+                mappings.put(urlMethod, new MethodMapping(ctrl, method));
+            }
+        }
+
+        return mappings;
     }
 
     private static String joinPackage(String packageName, String name) {
