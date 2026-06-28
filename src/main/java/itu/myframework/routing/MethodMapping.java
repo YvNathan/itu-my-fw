@@ -1,12 +1,12 @@
-package itu.myframework.util;
+package itu.myframework.routing;
 
 import java.lang.reflect.Method;
 
-public class URLMapping {
+public class MethodMapping {
     private Class<?> targetClass;
     private Method annotatedMethod;
 
-    public URLMapping(Class<?> targetClass, Method annotatedMethod) {
+    public MethodMapping(Class<?> targetClass, Method annotatedMethod) {
         this.targetClass = targetClass;
         this.annotatedMethod = annotatedMethod;
     }
