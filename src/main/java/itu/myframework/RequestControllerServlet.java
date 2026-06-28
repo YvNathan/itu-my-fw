@@ -2,6 +2,7 @@ package itu.myframework;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 
 import itu.myframework.routing.MethodMapping;
@@ -41,7 +42,7 @@ public class RequestControllerServlet extends HttpServlet {
         processRequest(req, res);
     }
 
-    private void processRequest(HttpServletRequest req, HttpServletResponse res) throws IOException {
+    private void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         res.setContentType("text/plain");
         PrintWriter printer = res.getWriter();
         
@@ -53,7 +54,23 @@ public class RequestControllerServlet extends HttpServlet {
         MethodMapping urlmap = mappings.get(new URLMethod(url, requestMethod));
 
         if (urlmap != null) {
-            printer.println("\"" + url + "\"" + " : url associé à la méthode " + urlmap.getAnnotatedMethod().getName() + " de la classe " + urlmap.getTargetClass().getSimpleName());
+            Class<?> targetClass = urlmap.getTargetClass();
+
+            Method annotatedMethod = urlmap.getAnnotatedMethod();
+
+            try {
+                Object instance = targetClass.getDeclaredConstructor().newInstance();
+
+                Object result = annotatedMethod.invoke(instance);
+
+                if (result != null) {
+                    printer.println(result.toString());
+                } else {
+                    printer.println("La méthode a bien été executé");
+                }
+            } catch (Exception e) {
+                throw new ServletException("Impossible d'executer la méthode");
+            }
         } else {
             printer.println("Voici les urls qui sont gérés :");
             for (URLMethod urlMethod : mappings.keySet()) {
