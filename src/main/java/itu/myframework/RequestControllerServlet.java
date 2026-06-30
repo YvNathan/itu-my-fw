@@ -8,7 +8,6 @@ import java.util.HashMap;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.RequestMethod;
 import itu.myframework.routing.URLMethod;
-import itu.myframework.scanner.Scanner;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -18,20 +17,11 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RequestControllerServlet extends HttpServlet {
     private HashMap<URLMethod, MethodMapping> mappings;
 
+    @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
 
-        String packageName = config.getInitParameter("package-name");
-
-        if (packageName == null || packageName.isEmpty()) {
-            packageName = "";
-        }
-
-        try {
-            mappings = Scanner.getMappings(packageName);
-        } catch (Exception e) {
-            throw new ServletException("Impossible de scanner le package", e);
-        }
+        mappings = (HashMap<URLMethod, MethodMapping>) getServletContext().getAttribute("mappings");
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
