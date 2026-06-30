@@ -8,8 +8,7 @@ import java.util.HashMap;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.RequestMethod;
 import itu.myframework.routing.URLMethod;
-import itu.myframework.scanner.Scanner;
-import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,22 +16,6 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class RequestControllerServlet extends HttpServlet {
     private HashMap<URLMethod, MethodMapping> mappings;
-
-    public void init(ServletConfig config) throws ServletException {
-        super.init(config);
-
-        String packageName = config.getInitParameter("package-name");
-
-        if (packageName == null || packageName.isEmpty()) {
-            packageName = "";
-        }
-
-        try {
-            mappings = Scanner.getMappings(packageName);
-        } catch (Exception e) {
-            throw new ServletException("Impossible de scanner le package", e);
-        }
-    }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
@@ -45,11 +28,15 @@ public class RequestControllerServlet extends HttpServlet {
     private void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         res.setContentType("text/plain");
         PrintWriter printer = res.getWriter();
+
+        ServletContext context = getServletContext();
         
         String contextPath = req.getContextPath();
 
         String url = req.getRequestURI().substring(contextPath.length());
         RequestMethod requestMethod = RequestMethod.valueOf(req.getMethod());
+
+        mappings = (HashMap<URLMethod, MethodMapping>) context.getAttribute("mappings");
 
         MethodMapping urlmap = mappings.get(new URLMethod(url, requestMethod));
 
