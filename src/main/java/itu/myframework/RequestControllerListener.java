@@ -20,9 +20,9 @@ public class RequestControllerListener implements ServletContextListener {
             packageName = "";
         }
 
-        HashMap<URLMethod, MethodMapping> mappings;
+        HashMap<URLMethod, MethodMapping> mappings = new HashMap<>();
         try {
-            mappings = Scanner.getMappings(packageName);
+            Scanner.getMappings(packageName, mappings);
             servletContext.setAttribute("mappings", mappings);
         } catch (Exception e) {
             e.printStackTrace();

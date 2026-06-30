@@ -80,8 +80,7 @@ public class Scanner {
         return methods;
     }
 
-    public static HashMap<URLMethod, MethodMapping> getMappings(String packageName) throws Exception {
-        HashMap<URLMethod, MethodMapping> mappings = new HashMap<>();
+    public static void getMappings(String packageName, HashMap<URLMethod, MethodMapping> mappings) throws Exception {
         List<Class<?>> controllers = getAnnotatedClasses(packageName, Controller.class);
 
         for (Class<?> ctrl : controllers) {
@@ -95,14 +94,13 @@ public class Scanner {
                 URLMethod urlMethod = new URLMethod(urlValue, requestMethod);
 
                 if (mappings.containsKey(urlMethod)) {
-                    throw new Exception("Duplicate mapping: " + requestMethod + " " + urlValue);
+                    throw new Exception("la clé: " + requestMethod + " " + urlValue + " existe déjà");
                 }
 
                 mappings.put(urlMethod, new MethodMapping(ctrl, method));
             }
         }
 
-        return mappings;
     }
 
     private static String joinPackage(String packageName, String name) {
