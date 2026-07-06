@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RequestControllerServlet extends HttpServlet {
     private HashMap<URLMethod, MethodMapping> mappings;
 
+    @SuppressWarnings("unchecked")
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
