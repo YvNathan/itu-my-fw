@@ -4,8 +4,10 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.Map;
 
 import itu.myframework.routing.MethodMapping;
+import itu.myframework.routing.ModelAndView;
 import itu.myframework.routing.RequestMethod;
 import itu.myframework.routing.URLMethod;
 import jakarta.servlet.ServletConfig;
@@ -16,6 +18,8 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class RequestControllerServlet extends HttpServlet {
     private HashMap<URLMethod, MethodMapping> mappings;
+    private String viewPrefix;
+    private String viewSuffix;
 
     @SuppressWarnings("unchecked")
     @Override
@@ -23,6 +27,8 @@ public class RequestControllerServlet extends HttpServlet {
         super.init(config);
 
         mappings = (HashMap<URLMethod, MethodMapping>) getServletContext().getAttribute("mappings");
+        viewPrefix = (String) getServletContext().getInitParameter("view-prefix");
+        viewSuffix = (String) getServletContext().getInitParameter("view-suffix");
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
@@ -36,7 +42,7 @@ public class RequestControllerServlet extends HttpServlet {
     private void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         res.setContentType("text/plain");
         PrintWriter printer = res.getWriter();
-        
+
         String contextPath = req.getContextPath();
 
         String url = req.getRequestURI().substring(contextPath.length());
@@ -54,13 +60,20 @@ public class RequestControllerServlet extends HttpServlet {
 
                 Object result = annotatedMethod.invoke(instance);
 
-                if (result != null) {
-                    printer.println(result.toString());
+                if (result instanceof ModelAndView) {
+                    ModelAndView mv = (ModelAndView) result;
+
+                    for (Map.Entry<String, Object> entry : mv.getData().entrySet()) {
+                        req.setAttribute(entry.getKey(), entry.getValue());
+                    }
+
+                    String viewPath = viewPrefix + mv.getViewName() + viewSuffix;
+                    req.getRequestDispatcher(viewPath).forward(req, res);
                 } else {
-                    printer.println("La méthode a bien été executé");
+                    throw new ServletException("La méthode ne retourne pas de ModelAndView");
                 }
             } catch (Exception e) {
-                throw new ServletException("Impossible d'executer la méthode");
+                throw new ServletException("Impossible d'executer la méthode" + e.getMessage());
             }
         } else {
             printer.println("Voici les urls qui sont gérés :");
@@ -69,8 +82,9 @@ public class RequestControllerServlet extends HttpServlet {
 
                 String urlValue = urlMethod.getUrl();
                 RequestMethod rm = urlMethod.getRequestMethod();
-                
-                printer.println(rm + ": \"" + urlValue + "\"" + " pour la méthode " + map.getAnnotatedMethod().getName() + " de la classe " + map.getTargetClass().getSimpleName());
+
+                printer.println(rm + ": \"" + urlValue + "\"" + " pour la méthode " + map.getAnnotatedMethod().getName()
+                        + " de la classe " + map.getTargetClass().getSimpleName());
             }
         }
     }
