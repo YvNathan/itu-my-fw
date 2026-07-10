@@ -1,18 +1,20 @@
 package itu.myframework.routing;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ModelAndView {
     private String viewName;
-    private Map<String, Object> data = new HashMap<>();
+    private Map<String, List<Object>> data = new HashMap<>();
 
-    public ModelAndView(String viewName, Map<String, Object> data) {
+    public ModelAndView(String viewName, Map<String, List<Object>> data) {
         this.viewName = viewName;
         this.data = data;
     }
 
     public ModelAndView(String viewName) {
+        this();
         this.viewName = viewName;
     }
 
@@ -27,15 +29,19 @@ public class ModelAndView {
         this.viewName = viewName;
     }
 
-    public Map<String, Object> getData() {
+    public Map<String, List<Object>> getData() {
         return data;
     }
 
-    public void setData(Map<String, Object> data) {
+    public void setData(Map<String, List<Object>> data) {
         this.data = data;
     }
 
-    public void addData(String name, Object value) {
+    public void addData(String name, List<Object> value) {
         this.data.put(name, value);
+    }
+
+    public void addDataToList(String name, Object value) {
+        this.data.computeIfAbsent(name, k -> new java.util.ArrayList<>()).add(value);
     }
 }

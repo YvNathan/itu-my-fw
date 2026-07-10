@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.ModelAndView;
@@ -63,7 +65,7 @@ public class RequestControllerServlet extends HttpServlet {
                 if (result instanceof ModelAndView) {
                     ModelAndView mv = (ModelAndView) result;
 
-                    for (Map.Entry<String, Object> entry : mv.getData().entrySet()) {
+                    for (Entry<String, List<Object>> entry : mv.getData().entrySet()) {
                         req.setAttribute(entry.getKey(), entry.getValue());
                     }
 
