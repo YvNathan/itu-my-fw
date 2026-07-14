@@ -10,6 +10,8 @@ import jakarta.servlet.ServletContextEvent;
 import jakarta.servlet.ServletContextListener;
 
 public class RequestControllerListener implements ServletContextListener {
+    private static final String SPRING_ROOT_CONTEXT_ATTRIBUTE = "org.springframework.web.context.WebApplicationContext.ROOT";
+
     @Override
     public void contextInitialized(ServletContextEvent sce) {
         ServletContext servletContext = sce.getServletContext();
@@ -27,5 +29,7 @@ public class RequestControllerListener implements ServletContextListener {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        servletContext.setAttribute("springContext", servletContext.getAttribute(SPRING_ROOT_CONTEXT_ATTRIBUTE));
     }
 }
