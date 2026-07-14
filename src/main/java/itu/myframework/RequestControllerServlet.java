@@ -5,7 +5,6 @@ import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 
 import itu.myframework.routing.MethodMapping;
@@ -22,6 +21,7 @@ public class RequestControllerServlet extends HttpServlet {
     private HashMap<URLMethod, MethodMapping> mappings;
     private String viewPrefix;
     private String viewSuffix;
+    private Object springContext;
 
     @SuppressWarnings("unchecked")
     @Override
@@ -31,6 +31,7 @@ public class RequestControllerServlet extends HttpServlet {
         mappings = (HashMap<URLMethod, MethodMapping>) getServletContext().getAttribute("mappings");
         viewPrefix = (String) getServletContext().getInitParameter("view-prefix");
         viewSuffix = (String) getServletContext().getInitParameter("view-suffix");
+        springContext = getServletContext().getAttribute("springContext");
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
@@ -60,7 +61,7 @@ public class RequestControllerServlet extends HttpServlet {
             try {
                 Object instance = targetClass.getDeclaredConstructor().newInstance();
 
-                Object result = annotatedMethod.invoke(instance);
+                Object result = annotatedMethod.invoke(instance, springContext);
 
                 if (result instanceof ModelAndView) {
                     ModelAndView mv = (ModelAndView) result;
