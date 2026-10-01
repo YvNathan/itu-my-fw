@@ -7,6 +7,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
+import com.google.gson.Gson;
+
+import itu.myframework.annotation.APIMethod;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.ModelAndView;
 import itu.myframework.routing.RequestMethod;
@@ -22,6 +25,7 @@ public class RequestControllerServlet extends HttpServlet {
     private String viewPrefix;
     private String viewSuffix;
     private Object springContext;
+    private final Gson gson = new Gson();
 
     @SuppressWarnings("unchecked")
     @Override
@@ -43,7 +47,6 @@ public class RequestControllerServlet extends HttpServlet {
     }
 
     private void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
-        res.setContentType("text/plain");
         PrintWriter printer = res.getWriter();
 
         String contextPath = req.getContextPath();
@@ -63,33 +66,68 @@ public class RequestControllerServlet extends HttpServlet {
 
                 Object result = annotatedMethod.invoke(instance, springContext);
 
-                if (result instanceof ModelAndView) {
-                    ModelAndView mv = (ModelAndView) result;
-
-                    for (Entry<String, List<Object>> entry : mv.getData().entrySet()) {
-                        req.setAttribute(entry.getKey(), entry.getValue());
-                    }
-
-                    String viewPath = viewPrefix + mv.getViewName() + viewSuffix;
-                    req.getRequestDispatcher(viewPath).forward(req, res);
+                if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
+                    handleApiResponse(result, res, printer);
+                } else if (result instanceof ModelAndView) {
+                    handleViewReponse((ModelAndView)result, req, res);
                 } else {
-                    throw new ServletException("La méthode ne retourne pas de ModelAndView");
+                    handleSimpleResponse(result, res, printer);
                 }
             } catch (Exception e) {
                 throw new ServletException("Impossible d'executer la méthode" + e.getMessage());
             }
         } else {
-            printer.println("Voici les urls qui sont gérés :");
-            for (URLMethod urlMethod : mappings.keySet()) {
-                MethodMapping map = mappings.get(urlMethod);
-
-                String urlValue = urlMethod.getUrl();
-                RequestMethod rm = urlMethod.getRequestMethod();
-
-                printer.println(rm + ": \"" + urlValue + "\"" + " pour la méthode " + map.getAnnotatedMethod().getName()
-                        + " de la classe " + map.getTargetClass().getSimpleName());
-            }
+            listURLs(res, printer);
         }
     }
 
+    private void handleApiResponse(Object result, HttpServletResponse res, PrintWriter printer) throws IOException {
+        res.setContentType("application/json");
+
+        String json;
+        if (result instanceof String) {
+            json = (String) result;
+        } else {
+            json = gson.toJson(result);
+        }
+
+        printer.print(json);
+        printer.flush();
+    }
+
+    private void handleViewReponse(ModelAndView mv, HttpServletRequest req, HttpServletResponse res)
+            throws ServletException, IOException {
+        res.setContentType("text/plain");
+        for (Entry<String, List<Object>> entry : mv.getData().entrySet()) {
+            req.setAttribute(entry.getKey(), entry.getValue());
+        }
+
+        String viewPath = viewPrefix + mv.getViewName() + viewSuffix;
+        req.getRequestDispatcher(viewPath).forward(req, res);
+    }
+
+    private void handleSimpleResponse(Object result, HttpServletResponse res, PrintWriter printer) {
+        res.setContentType("text/plain");
+
+        if (result != null) {
+            printer.println(result.toString());
+        } else {
+            printer.println("La méthode n'a pas de retour mais a bien été executée");
+        }
+    }
+
+    private void listURLs(HttpServletResponse res, PrintWriter printer) {
+        res.setContentType("text/plain");
+
+        printer.println("Voici les urls qui sont gérés :");
+        for (URLMethod urlMethod : mappings.keySet()) {
+            MethodMapping map = mappings.get(urlMethod);
+
+            String urlValue = urlMethod.getUrl();
+            RequestMethod rm = urlMethod.getRequestMethod();
+
+            printer.println(rm + ": \"" + urlValue + "\"" + " pour la méthode " + map.getAnnotatedMethod().getName()
+                    + " de la classe " + map.getTargetClass().getSimpleName());
+        }
+    }
 }
