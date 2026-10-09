@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
@@ -12,7 +11,9 @@ import java.util.Map.Entry;
 import com.google.gson.Gson;
 
 import itu.myframework.annotation.APIMethod;
+import itu.myframework.annotation.RequestModel;
 import itu.myframework.annotation.RequestParam;
+import itu.myframework.binding.Binder;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.ModelAndView;
 import itu.myframework.routing.RequestMethod;
@@ -74,10 +75,13 @@ public class RequestControllerServlet extends HttpServlet {
 
                 if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
                     handleApiResponse(result, res, printer);
+                    return;
                 } else if (result instanceof ModelAndView) {
                     handleViewReponse((ModelAndView) result, req, res);
+                    return;
                 } else {
                     handleSimpleResponse(result, res, printer);
+                    return;
                 }
             } catch (Exception e) {
                 throw new ServletException("Impossible d'executer la méthode" + e.getMessage());
@@ -94,55 +98,18 @@ public class RequestControllerServlet extends HttpServlet {
 
         for (int i = 0; i < params.length; i++) {
             RequestParam rp = params[i].getAnnotation(RequestParam.class);
-
-            if (rp != null) {
-                args[i] = resolveRequestParam(rp, params[i].getType(), req);
+            RequestModel rm = params[i].getAnnotation(RequestModel.class);
+            if (rm != null) {
+                Object model = Binder.bindModel(req, params[i].getType());
+                args[i] = model;
+            } else if (rp != null) {
+                args[i] = Binder.bindRequestParam(rp, params[i].getType(), req);
             } else {
                 args[i] = springContext;
             }
         }
 
         return args;
-    }
-
-    private Object resolveRequestParam(RequestParam rp, Class<?> type, HttpServletRequest req) throws ServletException {
-        String rawParam = req.getParameter(rp.value());
-
-        if (rawParam == null) {
-            if (rp.required()) {
-                throw new ServletException("Paramètre requis : " + rp.value());
-            } else {
-                return null;
-            }
-        }
-
-        try {
-            return resolveParamType(rawParam, type);
-        } catch (Exception e) {
-            throw new ServletException("Valeur invalide : " + rp.value());
-        }
-    }
-
-    private Object resolveParamType(String param, Class<?> type) {
-        if (type == String.class)
-            return param;
-        if (type == int.class || type == Integer.class) {
-            return Integer.parseInt(param);
-        }
-        if (type == long.class || type == Long.class) {
-            return Long.parseLong(param);
-        }
-        if (type == double.class || type == Double.class) {
-            return Double.parseDouble(param);
-        }
-        if (type == boolean.class || type == Boolean.class) {
-            return Boolean.parseBoolean(param);
-        }
-        if (type == LocalDate.class) {
-            return LocalDate.parse(param);
-        }
-
-        throw new IllegalArgumentException("Type non supporté");
     }
 
     private void handleApiResponse(Object result, HttpServletResponse res, PrintWriter printer) throws IOException {
