@@ -100,10 +100,10 @@ public class RequestControllerServlet extends HttpServlet {
             RequestParam rp = params[i].getAnnotation(RequestParam.class);
             RequestModel rm = params[i].getAnnotation(RequestModel.class);
             if (rm != null) {
-                Object model = Binder.bindModel(req, params[i].getType());
+                Object model = Binder.bindModel(req, params[i].getParameterizedType(), rm.value());
                 args[i] = model;
             } else if (rp != null) {
-                args[i] = Binder.bindRequestParam(rp, params[i].getType(), req);
+                args[i] = Binder.bindRequestParam(rp, params[i].getParameterizedType(), req);
             } else {
                 args[i] = springContext;
             }

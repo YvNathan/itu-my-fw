@@ -4,6 +4,8 @@ import java.util.List;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.time.LocalDate;
 import java.util.ArrayList;
 
@@ -12,8 +14,27 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 
 public class Binder {
-    public static Object bindRequestParam(RequestParam rp, Class<?> type, HttpServletRequest req)
+    public static Object bindRequestParam(RequestParam rp, Type type, HttpServletRequest req)
             throws ServletException {
+        if (isListType(type)) {
+            Class<?> itemType = listItemType(type);
+            if (!isSimpleType(itemType)) {
+                throw new ServletException(
+                        "@RequestParam ne supporte que les listes de types simples : " + rp.value());
+            }
+            try {
+                Object list = bindList(type, req, rp.value());
+                if (list == null && rp.required()) {
+                    throw new ServletException("Paramètre requis : " + rp.value());
+                }
+                return list;
+            } catch (ServletException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new ServletException("Valeur invalide : " + rp.value());
+            }
+        }
+
         String rawParam = req.getParameter(rp.value());
 
         if (rawParam == null) {
@@ -25,17 +46,30 @@ public class Binder {
         }
 
         try {
-            return resolveParamType(rawParam, type);
+            return resolveParamType(rawParam, (Class<?>) type);
         } catch (Exception e) {
             throw new ServletException("Valeur invalide : " + rp.value());
         }
     }
 
-    public static Object bindModel(HttpServletRequest req, Class<?> type) throws ServletException {
+    public static Object bindModel(HttpServletRequest req, Type type, String prefix) throws ServletException {
+        if (isListType(type)) {
+            if (prefix == null || prefix.isEmpty()) {
+                throw new ServletException("Préfixe requis pour une liste : @RequestModel(\"nom\")");
+            }
+            try {
+                Object list = bindList(type, req, prefix);
+                return list != null ? list : new ArrayList<>();
+            } catch (Exception e) {
+                throw new ServletException("Modele invalide : " + type.getTypeName());
+            }
+        }
+
+        Class<?> clazz = (Class<?>) type;
         try {
-            return bind(type, req, null);
+            return bind(clazz, req, prefix);
         } catch (Exception e) {
-            throw new ServletException("Modele invalide : " + type.getSimpleName());
+            throw new ServletException("Modele invalide : " + clazz.getSimpleName());
         }
     }
 
@@ -58,7 +92,12 @@ public class Binder {
 
                 Object value;
 
-                if (type.isArray()) {
+                if (isListType(field.getGenericType())) {
+                    value = bindList(field.getGenericType(), req, paramName);
+                    if (value == null) {
+                        continue;
+                    }
+                } else if (type.isArray()) {
                     value = bindArray(type, req, paramName);
                     if (value == null) {
                         continue;
@@ -84,9 +123,27 @@ public class Binder {
         return instance;
     }
 
-    private static Object bindArray(Class<?> type, HttpServletRequest req, String paramName) throws Exception {
-        Class<?> itemType = type.getComponentType();
+    private static boolean isListType(Type type) {
+        if (type == List.class) {
+            return true;
+        }
+        return type instanceof ParameterizedType pt && pt.getRawType() == List.class;
+    }
 
+    private static Class<?> listItemType(Type type) {
+        if (type instanceof ParameterizedType pt && pt.getActualTypeArguments()[0] instanceof Class<?> c) {
+            return c;
+        }
+        return String.class;
+    }
+
+    private static Object bindList(Type type, HttpServletRequest req, String paramName) throws Exception {
+        List<Object> items = collectItems(listItemType(type), req, paramName);
+        return items == null ? null : new ArrayList<>(items);
+    }
+
+    private static List<Object> collectItems(Class<?> itemType, HttpServletRequest req, String paramName)
+            throws Exception {
         List<Object> items = new ArrayList<>();
 
         if (isSimpleType(itemType)) {
@@ -108,6 +165,16 @@ public class Binder {
             if (items.isEmpty()) {
                 return null;
             }
+        }
+        return items;
+    }
+
+    private static Object bindArray(Class<?> type, HttpServletRequest req, String paramName) throws Exception {
+        Class<?> itemType = type.getComponentType();
+
+        List<Object> items = collectItems(itemType, req, paramName);
+        if (items == null) {
+            return null;
         }
 
         Object array = Array.newInstance(itemType, items.size());
