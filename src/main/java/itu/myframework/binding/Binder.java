@@ -10,12 +10,61 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 
 import itu.myframework.annotation.RequestParam;
+import itu.myframework.upload.FileUpload;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.Part;
 
 public class Binder {
+    private static List<FileUpload> bindFiles(HttpServletRequest req, String name) throws Exception {
+        List<FileUpload> files = new ArrayList<>();
+
+        if (!isMultipart(req)) {
+            return files;
+        }
+        for (Part part : req.getParts()) {
+            String fileName = part.getSubmittedFileName();
+            if (part.getName().equals(name) && fileName != null && !fileName.isEmpty()) {
+                files.add(FileUpload.fromPart(part));
+            }
+        }
+
+        return files;
+    }
+
     public static Object bindRequestParam(RequestParam rp, Type type, HttpServletRequest req)
             throws ServletException {
+        if (type == FileUpload.class) {
+            try {
+                List<FileUpload> files = bindFiles(req, rp.value());
+                if (files.isEmpty()) {
+                    if (rp.required()) {
+                        throw new ServletException("Fichier requis : " + rp.value());
+                    }
+                    return null;
+                }
+                return files.get(0);
+            } catch (ServletException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new ServletException("Impossible de lire le fichier : " + rp.value(), e);
+            }
+        }
+
+        if (isListType(type) && listItemType(type) == FileUpload.class) {
+            try {
+                List<FileUpload> files = bindFiles(req, rp.value());
+                if (files.isEmpty() && rp.required()) {
+                    throw new ServletException("Fichiers requis : " + rp.value());
+                }
+                return files;
+            } catch (ServletException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new ServletException("Erreur lors de la lecture des fichiers : " + rp.value(), e);
+            }
+        }
+
         if (isListType(type)) {
             Class<?> itemType = listItemType(type);
             if (!isSimpleType(itemType)) {
@@ -92,7 +141,20 @@ public class Binder {
 
                 Object value;
 
-                if (isListType(field.getGenericType())) {
+                if (type == FileUpload.class) {
+                    List<FileUpload> files = bindFiles(req, paramName);
+                    if (files.isEmpty()) {
+                        continue;
+                    }
+                    value = files.get(0);
+                } else if (isListType(field.getGenericType())
+                        && listItemType(field.getGenericType()) == FileUpload.class) {
+                    List<FileUpload> files = bindFiles(req, paramName);
+                    if (files.isEmpty()) {
+                        continue;
+                    }
+                    value = files;
+                } else if (isListType(field.getGenericType())) {
                     value = bindList(field.getGenericType(), req, paramName);
                     if (value == null) {
                         continue;
@@ -212,10 +274,26 @@ public class Binder {
         throw new IllegalArgumentException("Type non supporté");
     }
 
+    private static boolean isMultipart(HttpServletRequest req) {
+        String contentType = req.getContentType();
+        return contentType != null && contentType.toLowerCase().startsWith("multipart/");
+    }
+
     private static boolean hasParamWithPrefix(HttpServletRequest req, String prefix) {
         for (String name : req.getParameterMap().keySet()) {
             if (name.startsWith(prefix)) {
                 return true;
+            }
+        }
+
+        if (isMultipart(req)) {
+            try {
+                for (Part part : req.getParts()) {
+                    if (part.getName().startsWith(prefix)) {
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
             }
         }
         return false;
@@ -231,4 +309,5 @@ public class Binder {
             field.set(instance, value);
         }
     }
+
 }
