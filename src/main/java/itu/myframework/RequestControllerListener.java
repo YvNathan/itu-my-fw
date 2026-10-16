@@ -2,6 +2,7 @@ package itu.myframework;
 
 import java.util.HashMap;
 
+import itu.myframework.config.AppProperties;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.URLMethod;
 import itu.myframework.scanner.Scanner;
@@ -14,6 +15,12 @@ public class RequestControllerListener implements ServletContextListener {
 
     @Override
     public void contextInitialized(ServletContextEvent sce) {
+        try {
+            AppProperties.load("application.properties");
+        } catch (Exception e) {
+            throw new IllegalStateException("Lecture de application.properties impossible", e);
+        }
+        
         ServletContext servletContext = sce.getServletContext();
 
         String packageName = servletContext.getInitParameter("package-name");
