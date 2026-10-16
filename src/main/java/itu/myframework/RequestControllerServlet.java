@@ -2,6 +2,7 @@ package itu.myframework;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
@@ -84,7 +85,8 @@ public class RequestControllerServlet extends HttpServlet {
                     return;
                 }
             } catch (Exception e) {
-                throw new ServletException("Impossible d'executer la méthode" + e.getMessage());
+                Throwable cause = (e instanceof InvocationTargetException && e.getCause() != null) ? e.getCause() : e;
+                throw new ServletException("Impossible d'exécuter la méthode : " + cause, cause);
             }
         } else {
             listURLs(res, printer);

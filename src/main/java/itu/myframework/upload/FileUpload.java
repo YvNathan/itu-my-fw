@@ -2,8 +2,12 @@ package itu.myframework.upload;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 
+import itu.myframework.config.AppProperties;
 import jakarta.servlet.http.Part;
 
 public class FileUpload {
@@ -36,6 +40,43 @@ public class FileUpload {
         }
 
         return fileUpload;
+    }
+    
+    public String save() throws IOException {
+        return  save(getUploaddir());
+    }
+
+    public String save(Path path) throws IOException {
+        Path base = path.toAbsolutePath().normalize();
+        Files.createDirectories(base);
+
+        String ext = extension == null ? "" : extension.replaceAll("[^A-Za-z0-9]", "");
+        String nomGenere = UUID.randomUUID() + (ext.isEmpty() ? ""  : "." + ext);
+
+        Path cible = base.resolve(nomGenere).normalize();
+        if (!cible.startsWith(base)) {
+            throw new IOException("Chemin de destination refusé : " + cible);
+        }
+
+        Files.write(cible, contenu == null ? new byte[0] : contenu);
+        return nomGenere;
+    }
+
+    public static Path getChemin(String nomGenere) {
+        Path base = getUploaddir().toAbsolutePath().normalize();
+        Path chemin = base.resolve(nomGenere).normalize();
+        if (!chemin.startsWith(base)) {
+            throw new IllegalArgumentException("Nom de fichier refusé : " + nomGenere);
+        }
+        return chemin;
+    }
+
+    private static Path getUploaddir(){
+        String dir = AppProperties.get("upload.dir");
+        if (dir == null || dir.isBlank()) {
+            throw new IllegalStateException("upload.dir n'est pas défini dans application.properties");
+        }
+        return Paths.get(dir);
     }
 
     public String getNomComplet() {
