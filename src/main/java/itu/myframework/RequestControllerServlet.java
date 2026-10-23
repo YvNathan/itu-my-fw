@@ -8,6 +8,7 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.gson.Gson;
 
@@ -19,6 +20,7 @@ import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.ModelAndView;
 import itu.myframework.routing.RequestMethod;
 import itu.myframework.routing.URLMethod;
+import itu.myframework.session.Session;
 import jakarta.servlet.ServletConfig;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
@@ -27,6 +29,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public class RequestControllerServlet extends HttpServlet {
     private HashMap<URLMethod, MethodMapping> mappings;
+    private ConcurrentHashMap<String, Session> sessionMap;
     private String viewPrefix;
     private String viewSuffix;
     private Object springContext;
@@ -40,6 +43,7 @@ public class RequestControllerServlet extends HttpServlet {
         mappings = (HashMap<URLMethod, MethodMapping>) getServletContext().getAttribute("mappings");
         viewPrefix = (String) getServletContext().getInitParameter("view-prefix");
         viewSuffix = (String) getServletContext().getInitParameter("view-suffix");
+        sessionMap = (ConcurrentHashMap<String, Session>) getServletContext().getAttribute("sessionMap");
         springContext = getServletContext().getAttribute("springContext");
     }
 
@@ -74,6 +78,12 @@ public class RequestControllerServlet extends HttpServlet {
 
                 Object result = annotatedMethod.invoke(instance, arguments);
 
+                for (Object argument : arguments) {
+                    if (argument instanceof Session) {
+                        ((Session) argument).syncHttpSession(req);
+                    }
+                }
+
                 if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
                     handleApiResponse(result, res, printer);
                     return;
@@ -101,7 +111,9 @@ public class RequestControllerServlet extends HttpServlet {
         for (int i = 0; i < params.length; i++) {
             RequestParam rp = params[i].getAnnotation(RequestParam.class);
             RequestModel rm = params[i].getAnnotation(RequestModel.class);
-            if (rm != null) {
+            if (params[i].getType() == Session.class) {
+                args[i] = sessionMap.computeIfAbsent(req.getSession().getId(), id -> new Session(req));
+            } else if (rm != null) {
                 Object model = Binder.bindModel(req, params[i].getParameterizedType(), rm.value());
                 args[i] = model;
             } else if (rp != null) {
