@@ -19,7 +19,6 @@ public class Session {
         reload(req);
     }
 
-    /** Recharge le contenu depuis la HttpSession (ce qu'une JSP a pu y écrire entre deux requêtes). */
     public void reload(HttpServletRequest req) {
         HttpSession httpSession = req.getSession();
         Map<String, Object> copy = new ConcurrentHashMap<>();
