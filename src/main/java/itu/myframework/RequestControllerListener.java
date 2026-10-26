@@ -50,6 +50,12 @@ public class RequestControllerListener implements ServletContextListener, HttpSe
         }
         servletContext.setAttribute("authSessionKey", authSessionKey);
 
+        String roleSessionKey = servletContext.getInitParameter("role-session-key");
+        if (roleSessionKey == null || roleSessionKey.isBlank()) {
+            roleSessionKey = "role";
+        }
+        servletContext.setAttribute("roleSessionKey", roleSessionKey);
+
         sessionMap = new ConcurrentHashMap<>();
         servletContext.setAttribute("sessionMap", sessionMap);
 

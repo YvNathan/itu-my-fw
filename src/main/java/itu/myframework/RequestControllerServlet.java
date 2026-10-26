@@ -5,6 +5,8 @@ import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
@@ -71,9 +73,18 @@ public class RequestControllerServlet extends HttpServlet {
             String authKey = (String) getServletContext().getAttribute("authSessionKey");
             Object userBefore = currentUser(req, authKey);
 
-            if (isAuthRequired(url, annotatedMethod, targetClass) && userBefore == null) {
-                denyAccess(annotatedMethod, req, res);
-                return;
+            String roleKey = (String) getServletContext().getAttribute("roleSessionKey");
+
+            Auth auth = findAuth(url, annotatedMethod, targetClass);
+            if (auth != null) {
+                if (userBefore == null) {
+                    denyAccess(annotatedMethod, req, res);
+                    return;
+                }
+                if (auth.value().length > 0 && !hasAnyRole(req, roleKey, auth.value())) {
+                    forbidAccess(annotatedMethod, req, res);
+                    return;
+                }
             }
 
             try {
@@ -140,12 +151,40 @@ public class RequestControllerServlet extends HttpServlet {
         return args;
     }
 
-    private boolean isAuthRequired(String url, Method annotatedMethod, Class<?> targetClass) {
-        if (!annotatedMethod.isAnnotationPresent(Auth.class) && !targetClass.isAnnotationPresent(Auth.class)) {
-            return false;
+    private Auth findAuth(String url, Method annotatedMethod, Class<?> targetClass) {
+        Auth auth = annotatedMethod.getAnnotation(Auth.class);
+        if (auth == null) {
+            auth = targetClass.getAnnotation(Auth.class);
         }
         String loginUrl = getServletContext().getInitParameter("auth-login-url");
-        return loginUrl == null || !loginUrl.equals(url);
+        if (loginUrl != null && loginUrl.equals(url)) {
+            return null;
+        }
+        return auth;
+    }
+
+    private boolean hasAnyRole(HttpServletRequest req, String roleKey, String[] allowed) {
+        HttpSession httpSession = req.getSession(false);
+        if (httpSession == null) {
+            return false;
+        }
+        Object value = httpSession.getAttribute(roleKey);
+
+        List<String> roles = new ArrayList<>();
+        if (value instanceof Collection) {
+            for (Object r : (Collection<?>) value) {
+                roles.add(String.valueOf(r));
+            }
+        } else if (value != null) {
+            roles.add(value.toString());
+        }
+
+        for (String role : allowed) {
+            if (roles.contains(role)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Object currentUser(HttpServletRequest req, String authKey) {
@@ -165,6 +204,21 @@ public class RequestControllerServlet extends HttpServlet {
             res.sendRedirect(req.getContextPath() + loginUrl);
         } else {
             res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentification requise");
+        }
+    }
+
+    private void forbidAccess(Method annotatedMethod, HttpServletRequest req, HttpServletResponse res)
+            throws IOException {
+        String forbiddenUrl = getServletContext().getInitParameter("auth-forbidden-url");
+
+        if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
+            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            res.setContentType("application/json;charset=UTF-8");
+            res.getWriter().print(gson.toJson(java.util.Map.of("error", "Accès refusé")));
+        } else if (forbiddenUrl != null && !forbiddenUrl.isBlank()) {
+            res.sendRedirect(req.getContextPath() + forbiddenUrl);
+        } else {
+            res.sendError(HttpServletResponse.SC_FORBIDDEN, "Accès refusé");
         }
     }
 
