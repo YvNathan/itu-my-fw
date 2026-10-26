@@ -8,11 +8,13 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.google.gson.Gson;
 
 import itu.myframework.annotation.APIMethod;
+import itu.myframework.annotation.Auth;
 import itu.myframework.annotation.RequestModel;
 import itu.myframework.annotation.RequestParam;
 import itu.myframework.binding.Binder;
@@ -26,24 +28,16 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 public class RequestControllerServlet extends HttpServlet {
-    private HashMap<URLMethod, MethodMapping> mappings;
-    private ConcurrentHashMap<String, Session> sessionMap;
-    private String viewPrefix;
-    private String viewSuffix;
     private Object springContext;
     private final Gson gson = new Gson();
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
 
-        mappings = (HashMap<URLMethod, MethodMapping>) getServletContext().getAttribute("mappings");
-        viewPrefix = (String) getServletContext().getInitParameter("view-prefix");
-        viewSuffix = (String) getServletContext().getInitParameter("view-suffix");
-        sessionMap = (ConcurrentHashMap<String, Session>) getServletContext().getAttribute("sessionMap");
         springContext = getServletContext().getAttribute("springContext");
     }
 
@@ -64,12 +58,23 @@ public class RequestControllerServlet extends HttpServlet {
 
         RequestMethod requestMethod = RequestMethod.valueOf(req.getMethod());
 
+        @SuppressWarnings("unchecked")
+        HashMap<URLMethod, MethodMapping> mappings = (HashMap<URLMethod, MethodMapping>) getServletContext()
+                .getAttribute("mappings");
         MethodMapping urlmap = mappings.get(new URLMethod(url, requestMethod));
 
         if (urlmap != null) {
             Class<?> targetClass = urlmap.getTargetClass();
 
             Method annotatedMethod = urlmap.getAnnotatedMethod();
+
+            String authKey = (String) getServletContext().getAttribute("authSessionKey");
+            Object userBefore = currentUser(req, authKey);
+
+            if (isAuthRequired(url, annotatedMethod, targetClass) && userBefore == null) {
+                denyAccess(annotatedMethod, req, res);
+                return;
+            }
 
             try {
                 Object instance = targetClass.getDeclaredConstructor().newInstance();
@@ -82,6 +87,10 @@ public class RequestControllerServlet extends HttpServlet {
                     if (argument instanceof Session) {
                         ((Session) argument).syncHttpSession(req);
                     }
+                }
+
+                if (!Objects.equals(userBefore, currentUser(req, authKey)) && req.getSession(false) != null) {
+                    req.changeSessionId();
                 }
 
                 if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
@@ -99,10 +108,11 @@ public class RequestControllerServlet extends HttpServlet {
                 throw new ServletException("Impossible d'exécuter la méthode : " + cause, cause);
             }
         } else {
-            listURLs(res, printer);
+            listURLs(res, printer, mappings);
         }
     }
 
+    @SuppressWarnings("unchecked")
     private Object[] resolveArguments(Method annotatedMethod, HttpServletRequest req, HttpServletResponse res,
             Object springContext) throws ServletException {
         Parameter[] params = annotatedMethod.getParameters();
@@ -112,7 +122,11 @@ public class RequestControllerServlet extends HttpServlet {
             RequestParam rp = params[i].getAnnotation(RequestParam.class);
             RequestModel rm = params[i].getAnnotation(RequestModel.class);
             if (params[i].getType() == Session.class) {
-                args[i] = sessionMap.computeIfAbsent(req.getSession().getId(), id -> new Session(req));
+                ConcurrentHashMap<String, Session> sessionMap = (ConcurrentHashMap<String, Session>) getServletContext()
+                        .getAttribute("sessionMap");
+                Session session = sessionMap.computeIfAbsent(req.getSession().getId(), id -> new Session(req));
+                session.reload(req);
+                args[i] = session;
             } else if (rm != null) {
                 Object model = Binder.bindModel(req, params[i].getParameterizedType(), rm.value());
                 args[i] = model;
@@ -124,6 +138,34 @@ public class RequestControllerServlet extends HttpServlet {
         }
 
         return args;
+    }
+
+    private boolean isAuthRequired(String url, Method annotatedMethod, Class<?> targetClass) {
+        if (!annotatedMethod.isAnnotationPresent(Auth.class) && !targetClass.isAnnotationPresent(Auth.class)) {
+            return false;
+        }
+        String loginUrl = getServletContext().getInitParameter("auth-login-url");
+        return loginUrl == null || !loginUrl.equals(url);
+    }
+
+    private Object currentUser(HttpServletRequest req, String authKey) {
+        HttpSession httpSession = req.getSession(false);
+        return httpSession == null ? null : httpSession.getAttribute(authKey);
+    }
+
+    private void denyAccess(Method annotatedMethod, HttpServletRequest req, HttpServletResponse res)
+            throws IOException {
+        String loginUrl = getServletContext().getInitParameter("auth-login-url");
+
+        if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.setContentType("application/json;charset=UTF-8");
+            res.getWriter().print(gson.toJson(java.util.Map.of("error", "Veuillez vous connecter")));
+        } else if (loginUrl != null && !loginUrl.isBlank()) {
+            res.sendRedirect(req.getContextPath() + loginUrl);
+        } else {
+            res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentification requise");
+        }
     }
 
     private void handleApiResponse(Object result, HttpServletResponse res, PrintWriter printer) throws IOException {
@@ -142,12 +184,18 @@ public class RequestControllerServlet extends HttpServlet {
 
     private void handleViewReponse(ModelAndView mv, HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
+        if (mv.getViewName() != null && mv.getViewName().startsWith("redirect:")) {
+            res.sendRedirect(req.getContextPath() + mv.getViewName().substring("redirect:".length()));
+            return;
+        }
+
         res.setContentType("text/plain");
         for (Entry<String, List<Object>> entry : mv.getData().entrySet()) {
             req.setAttribute(entry.getKey(), entry.getValue());
         }
 
-        String viewPath = viewPrefix + mv.getViewName() + viewSuffix;
+        String viewPath = (String) getServletContext().getInitParameter("view-prefix") + mv.getViewName()
+                + (String) getServletContext().getInitParameter("view-suffix");
         req.getRequestDispatcher(viewPath).forward(req, res);
     }
 
@@ -161,12 +209,17 @@ public class RequestControllerServlet extends HttpServlet {
         }
     }
 
-    private void listURLs(HttpServletResponse res, PrintWriter printer) {
+    private void listURLs(HttpServletResponse res, PrintWriter printer, HashMap<URLMethod, MethodMapping> mappings) {
+        res.setStatus(HttpServletResponse.SC_NOT_FOUND);
         res.setContentType("text/plain");
 
         printer.println("Voici les urls qui sont gérés :");
         for (URLMethod urlMethod : mappings.keySet()) {
             MethodMapping map = mappings.get(urlMethod);
+            if (map.getAnnotatedMethod().isAnnotationPresent(Auth.class)
+                    || map.getTargetClass().isAnnotationPresent(Auth.class)) {
+                continue;
+            }
 
             String urlValue = urlMethod.getUrl();
             RequestMethod rm = urlMethod.getRequestMethod();

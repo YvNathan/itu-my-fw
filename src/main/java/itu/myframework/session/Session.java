@@ -16,10 +16,17 @@ public class Session {
 
     public Session(HttpServletRequest req) {
         this();
+        reload(req);
+    }
+
+    /** Recharge le contenu depuis la HttpSession (ce qu'une JSP a pu y écrire entre deux requêtes). */
+    public void reload(HttpServletRequest req) {
         HttpSession httpSession = req.getSession();
+        Map<String, Object> copy = new ConcurrentHashMap<>();
         for (String name : Collections.list(httpSession.getAttributeNames())) {
-            attributes.put(name, httpSession.getAttribute(name));
+            copy.put(name, httpSession.getAttribute(name));
         }
+        attributes = copy;
     }
 
     public Object getAttribute(String name) {
@@ -27,7 +34,11 @@ public class Session {
     }
 
     public void setAttribute(String name, Object value) {
-        attributes.put(name, value);
+        if (value == null) {
+            attributes.remove(name);
+        } else {
+            attributes.put(name, value);
+        }
     }
 
     public void clear(){
