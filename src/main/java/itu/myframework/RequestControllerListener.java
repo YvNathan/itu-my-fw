@@ -39,7 +39,17 @@ public class RequestControllerListener implements ServletContextListener, HttpSe
         HashMap<URLMethod, MethodMapping> mappings = new HashMap<>();
         try {
             Scanner.getMappings(packageName, mappings);
+            
+            HashMap<Class<?>, Object> controllers = new HashMap<>();
+            for (MethodMapping mapping : mappings.values()) {
+                Class<?> ctrl = mapping.getTargetClass();
+                if (!controllers.containsKey(ctrl)) {
+                    controllers.put(ctrl, ctrl.getDeclaredConstructor().newInstance());
+                }
+            }
+
             servletContext.setAttribute("mappings", mappings);
+            servletContext.setAttribute("controllers", controllers);
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -88,7 +88,8 @@ public class RequestControllerServlet extends HttpServlet {
             }
 
             try {
-                Object instance = targetClass.getDeclaredConstructor().newInstance();
+                @SuppressWarnings("unchecked")
+                Object instance =((HashMap<Class<?>, Object>) getServletContext().getAttribute("controllers")).get(targetClass);
 
                 Object[] arguments = resolveArguments(annotatedMethod, req, res, springContext);
 
