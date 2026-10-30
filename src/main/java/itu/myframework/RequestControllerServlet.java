@@ -17,6 +17,7 @@ import com.google.gson.Gson;
 
 import itu.myframework.annotation.APIMethod;
 import itu.myframework.annotation.Auth;
+import itu.myframework.annotation.Controller;
 import itu.myframework.annotation.RequestModel;
 import itu.myframework.annotation.RequestParam;
 import itu.myframework.binding.Binder;
@@ -51,6 +52,7 @@ public class RequestControllerServlet extends HttpServlet {
         processRequest(req, res);
     }
 
+    @SuppressWarnings("unchecked")
     private void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         PrintWriter printer = res.getWriter();
 
@@ -60,7 +62,6 @@ public class RequestControllerServlet extends HttpServlet {
 
         RequestMethod requestMethod = RequestMethod.valueOf(req.getMethod());
 
-        @SuppressWarnings("unchecked")
         HashMap<URLMethod, MethodMapping> mappings = (HashMap<URLMethod, MethodMapping>) getServletContext()
                 .getAttribute("mappings");
         MethodMapping urlmap = mappings.get(new URLMethod(url, requestMethod));
@@ -88,8 +89,12 @@ public class RequestControllerServlet extends HttpServlet {
             }
 
             try {
-                @SuppressWarnings("unchecked")
-                Object instance =((HashMap<Class<?>, Object>) getServletContext().getAttribute("controllers")).get(targetClass);
+                Object instance;
+                if(targetClass.getAnnotation(Controller.class).singleton()) {
+                    instance =((HashMap<Class<?>, Object>) getServletContext().getAttribute("controllers")).get(targetClass);
+                } else {
+                    instance = targetClass.getDeclaredConstructor().newInstance(); 
+                }
 
                 Object[] arguments = resolveArguments(annotatedMethod, req, res, springContext);
 
