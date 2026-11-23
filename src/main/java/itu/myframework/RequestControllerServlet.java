@@ -44,11 +44,27 @@ public class RequestControllerServlet extends HttpServlet {
         springContext = getServletContext().getAttribute("springContext");
     }
 
+    @Override 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
 
+    @Override 
     public void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+        processRequest(req, res);
+    }
+
+    @Override 
+    public void doPut(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+        processRequest(req, res);
+    }
+
+    @Override 
+    public void doDelete(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+        processRequest(req, res);
+    }
+
+    public void doOptions(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
 
