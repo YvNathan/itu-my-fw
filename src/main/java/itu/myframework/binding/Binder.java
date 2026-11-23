@@ -85,7 +85,7 @@ public class Binder {
             } catch (ServletException e) {
                 throw e;
             } catch (Exception e) {
-                throw new ServletException("Valeur invalide : " + rp.value());
+                throw new ServletException("Valeur invalide : " + rp.value(), e);
             }
         }
 
@@ -123,7 +123,7 @@ public class Binder {
                 Object list = bindList(type, req, prefix);
                 return list != null ? list : new ArrayList<>();
             } catch (Exception e) {
-                throw new ServletException("Modele invalide : " + type.getTypeName());
+                throw new ServletException("Modele invalide : " + type.getTypeName(), e);
             }
         }
 
@@ -131,7 +131,7 @@ public class Binder {
         try {
             return bind(clazz, req, prefix);
         } catch (Exception e) {
-            throw new ServletException("Modele invalide : " + clazz.getSimpleName());
+            throw new ServletException("Modele invalide : " + clazz.getSimpleName(), e);
         }
     }
 

@@ -77,6 +77,11 @@ public class RequestControllerServlet extends HttpServlet {
         String contextPath = req.getContextPath();
 
         String url = req.getRequestURI().substring(contextPath.length());
+        if (url.isEmpty()) {
+            url = "/";
+        } else if (url.length() > 1 && url.endsWith("/"))  {
+            url = url.substring(0, url.length() -1);
+        }
 
         RequestMethod requestMethod = RequestMethod.valueOf(req.getMethod());
 

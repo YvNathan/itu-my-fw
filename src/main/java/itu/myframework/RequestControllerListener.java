@@ -52,7 +52,7 @@ public class RequestControllerListener implements ServletContextListener, HttpSe
             servletContext.setAttribute("mappings", mappings);
             servletContext.setAttribute("controllers", controllers);
         } catch (Exception e) {
-            throw new IllegalStateException("Echec de l'initialiation");
+            throw new IllegalStateException("Echec de l'initialiation", e);
         }
 
         String authSessionKey = servletContext.getInitParameter("auth-session-key");

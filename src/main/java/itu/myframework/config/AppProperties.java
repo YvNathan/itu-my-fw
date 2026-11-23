@@ -15,9 +15,9 @@ public final class AppProperties {
         try (InputStream in = classLoader.getResourceAsStream(resourceName)) {
             if (in != null) {
                 properties.load(in);
-                System.out.println("[AppProperties] " + resourceName
-                        + (in == null ? " INTROUVABLE" : " chargé, clés = " + properties.stringPropertyNames()));
             }
+            System.out.println("[AppProperties] " + resourceName
+                    + (in == null ? " INTROUVABLE" : " chargé, clés = " + properties.stringPropertyNames()));
         }
     }
 
