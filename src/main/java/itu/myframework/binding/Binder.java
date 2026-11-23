@@ -252,7 +252,7 @@ public class Binder {
                 || type == boolean.class || type == Boolean.class || type == LocalDate.class;
     }
 
-    private static Object resolveParamType(String param, Class<?> type) {
+    public static Object resolveParamType(String param, Class<?> type) {
         if (type == String.class)
             return param;
         if (type == int.class || type == Integer.class) {

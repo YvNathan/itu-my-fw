@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,6 +19,7 @@ import com.google.gson.Gson;
 import itu.myframework.annotation.APIMethod;
 import itu.myframework.annotation.Auth;
 import itu.myframework.annotation.Controller;
+import itu.myframework.annotation.PathVariable;
 import itu.myframework.annotation.RequestModel;
 import itu.myframework.annotation.RequestParam;
 import itu.myframework.binding.Binder;
@@ -64,6 +66,7 @@ public class RequestControllerServlet extends HttpServlet {
         processRequest(req, res);
     }
 
+    @Override
     public void doOptions(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
@@ -80,7 +83,23 @@ public class RequestControllerServlet extends HttpServlet {
 
         HashMap<URLMethod, MethodMapping> mappings = (HashMap<URLMethod, MethodMapping>) getServletContext()
                 .getAttribute("mappings");
+        Map<String, String> pathVariables = new HashMap<>();
         MethodMapping urlmap = mappings.get(new URLMethod(url, requestMethod));
+
+        if (urlmap == null) {
+            for (Entry<URLMethod, MethodMapping> entry : mappings.entrySet()) {
+                URLMethod candidate = entry.getKey();
+                if (candidate.getRequestMethod() != requestMethod || !candidate.getUrl().contains("{")) {
+                    continue;
+                }
+                Map<String, String> extracted = matchPath(candidate.getUrl(), url);
+                if (extracted != null) {
+                    urlmap = entry.getValue();
+                    pathVariables = extracted;
+                    break;
+                }
+            }
+        }
 
         if (urlmap != null) {
             Class<?> targetClass = urlmap.getTargetClass();
@@ -112,7 +131,7 @@ public class RequestControllerServlet extends HttpServlet {
                     instance = targetClass.getDeclaredConstructor().newInstance(); 
                 }
 
-                Object[] arguments = resolveArguments(annotatedMethod, req, res, springContext);
+                Object[] arguments = resolveArguments(annotatedMethod, req, res, springContext, pathVariables);
 
                 Object result = annotatedMethod.invoke(instance, arguments);
 
@@ -145,15 +164,38 @@ public class RequestControllerServlet extends HttpServlet {
         }
     }
 
+    private Map<String, String> matchPath(String template, String url){
+        String[] templateParts = template.split("/");
+        String[] urlParts = url.split("/");
+
+        if (templateParts.length != urlParts.length) {
+            return null;
+        }
+        Map<String, String> vars = new HashMap<>();
+        for (int i = 0; i < templateParts.length; i++) {
+            String tp = templateParts[i];
+            String ap = urlParts[i];
+
+            if (tp.startsWith("{") && tp.endsWith("}")) {
+                String varName = tp.substring(1, tp.length() -1);
+                vars.put(varName, ap);
+            } else if (!tp.equals(ap)){
+                return null;
+            }
+        }
+        return vars;
+    }
+
     @SuppressWarnings("unchecked")
     private Object[] resolveArguments(Method annotatedMethod, HttpServletRequest req, HttpServletResponse res,
-            Object springContext) throws ServletException {
+            Object springContext, Map<String, String> pathVariables) throws ServletException {
         Parameter[] params = annotatedMethod.getParameters();
         Object[] args = new Object[params.length];
 
         for (int i = 0; i < params.length; i++) {
             RequestParam rp = params[i].getAnnotation(RequestParam.class);
             RequestModel rm = params[i].getAnnotation(RequestModel.class);
+            PathVariable pv = params[i].getAnnotation(PathVariable.class);
             if (params[i].getType() == Session.class) {
                 ConcurrentHashMap<String, Session> sessionMap = (ConcurrentHashMap<String, Session>) getServletContext()
                         .getAttribute("sessionMap");
@@ -165,6 +207,16 @@ public class RequestControllerServlet extends HttpServlet {
                 args[i] = model;
             } else if (rp != null) {
                 args[i] = Binder.bindRequestParam(rp, params[i].getParameterizedType(), req);
+            } else if (pv != null) {
+                String raw = pathVariables.get(pv.value());
+                if (raw == null) {
+                    throw new ServletException("PathVariable manquant : " + pv.value());
+                }
+                try {
+                    args[i] = Binder.resolveParamType(raw, (Class<?>) params[i].getParameterizedType());
+                } catch (Exception e) {
+                    throw new ServletException("PathVariable invalide : " + pv.value(), e);
+                }
             } else {
                 args[i] = springContext;
             }
