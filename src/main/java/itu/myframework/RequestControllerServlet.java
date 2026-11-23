@@ -23,6 +23,7 @@ import itu.myframework.annotation.PathVariable;
 import itu.myframework.annotation.RequestModel;
 import itu.myframework.annotation.RequestParam;
 import itu.myframework.binding.Binder;
+import itu.myframework.config.AppProperties;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.ModelAndView;
 import itu.myframework.routing.RequestMethod;
@@ -46,22 +47,22 @@ public class RequestControllerServlet extends HttpServlet {
         springContext = getServletContext().getAttribute("springContext");
     }
 
-    @Override 
+    @Override
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
 
-    @Override 
+    @Override
     public void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
 
-    @Override 
+    @Override
     public void doPut(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
 
-    @Override 
+    @Override
     public void doDelete(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         processRequest(req, res);
     }
@@ -73,8 +74,6 @@ public class RequestControllerServlet extends HttpServlet {
 
     @SuppressWarnings("unchecked")
     private void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
-        PrintWriter printer = res.getWriter();
-
         String contextPath = req.getContextPath();
 
         String url = req.getRequestURI().substring(contextPath.length());
@@ -125,10 +124,11 @@ public class RequestControllerServlet extends HttpServlet {
 
             try {
                 Object instance;
-                if(targetClass.getAnnotation(Controller.class).singleton()) {
-                    instance =((HashMap<Class<?>, Object>) getServletContext().getAttribute("controllers")).get(targetClass);
+                if (targetClass.getAnnotation(Controller.class).singleton()) {
+                    instance = ((HashMap<Class<?>, Object>) getServletContext().getAttribute("controllers"))
+                            .get(targetClass);
                 } else {
-                    instance = targetClass.getDeclaredConstructor().newInstance(); 
+                    instance = targetClass.getDeclaredConstructor().newInstance();
                 }
 
                 Object[] arguments = resolveArguments(annotatedMethod, req, res, springContext, pathVariables);
@@ -146,13 +146,13 @@ public class RequestControllerServlet extends HttpServlet {
                 }
 
                 if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
-                    handleApiResponse(result, res, printer);
+                    handleApiResponse(result, res);
                     return;
                 } else if (result instanceof ModelAndView) {
                     handleViewReponse((ModelAndView) result, req, res);
                     return;
                 } else {
-                    handleSimpleResponse(result, res, printer);
+                    handleSimpleResponse(result, res);
                     return;
                 }
             } catch (Exception e) {
@@ -160,11 +160,23 @@ public class RequestControllerServlet extends HttpServlet {
                 throw new ServletException("Impossible d'exécuter la méthode : " + cause, cause);
             }
         } else {
-            listURLs(res, printer, mappings);
+            boolean isStatic = !url.startsWith("/WEB-INF/") && !url.endsWith("/") && getServletContext().getResource(url) != null;
+
+            if (isStatic) {
+                getServletContext().getNamedDispatcher("default").forward(req, res);
+                return ;
+            }
+
+            if ("true".equalsIgnoreCase(AppProperties.get("app.debug"))) {
+                listURLs(res, mappings);
+            } else {
+                res.sendError(HttpServletResponse.SC_NOT_FOUND);
+            }
+
         }
     }
 
-    private Map<String, String> matchPath(String template, String url){
+    private Map<String, String> matchPath(String template, String url) {
         String[] templateParts = template.split("/");
         String[] urlParts = url.split("/");
 
@@ -177,9 +189,9 @@ public class RequestControllerServlet extends HttpServlet {
             String ap = urlParts[i];
 
             if (tp.startsWith("{") && tp.endsWith("}")) {
-                String varName = tp.substring(1, tp.length() -1);
+                String varName = tp.substring(1, tp.length() - 1);
                 vars.put(varName, ap);
-            } else if (!tp.equals(ap)){
+            } else if (!tp.equals(ap)) {
                 return null;
             }
         }
@@ -217,8 +229,11 @@ public class RequestControllerServlet extends HttpServlet {
                 } catch (Exception e) {
                     throw new ServletException("PathVariable invalide : " + pv.value(), e);
                 }
-            } else {
+            } else if (springContext != null && params[i].getType().isInstance(springContext)) {
                 args[i] = springContext;
+            } else {
+                throw new ServletException("Paramètre non résolu : " + params[i].getName() + "("
+                        + params[i].getType().getSimpleName() + ")");
             }
         }
 
@@ -296,8 +311,9 @@ public class RequestControllerServlet extends HttpServlet {
         }
     }
 
-    private void handleApiResponse(Object result, HttpServletResponse res, PrintWriter printer) throws IOException {
-        res.setContentType("application/json");
+    private void handleApiResponse(Object result, HttpServletResponse res) throws IOException {
+        res.setContentType("application/json;charset=UTF-8");
+        PrintWriter printer = res.getWriter();
 
         String json;
         if (result instanceof String) {
@@ -317,7 +333,6 @@ public class RequestControllerServlet extends HttpServlet {
             return;
         }
 
-        res.setContentType("text/plain");
         for (Entry<String, List<Object>> entry : mv.getData().entrySet()) {
             req.setAttribute(entry.getKey(), entry.getValue());
         }
@@ -327,8 +342,9 @@ public class RequestControllerServlet extends HttpServlet {
         req.getRequestDispatcher(viewPath).forward(req, res);
     }
 
-    private void handleSimpleResponse(Object result, HttpServletResponse res, PrintWriter printer) {
-        res.setContentType("text/plain");
+    private void handleSimpleResponse(Object result, HttpServletResponse res) throws IOException {
+        res.setContentType("text/plain;charset=UTF-8");
+        PrintWriter printer = res.getWriter();
 
         if (result != null) {
             printer.println(result.toString());
@@ -337,9 +353,10 @@ public class RequestControllerServlet extends HttpServlet {
         }
     }
 
-    private void listURLs(HttpServletResponse res, PrintWriter printer, HashMap<URLMethod, MethodMapping> mappings) {
+    private void listURLs(HttpServletResponse res, HashMap<URLMethod, MethodMapping> mappings) throws IOException {
         res.setStatus(HttpServletResponse.SC_NOT_FOUND);
-        res.setContentType("text/plain");
+        res.setContentType("text/plain;charset=UTF-8");
+        PrintWriter printer = res.getWriter();
 
         printer.println("Voici les urls qui sont gérés :");
         for (URLMethod urlMethod : mappings.keySet()) {
