@@ -1,14 +1,15 @@
 package itu.myframework.routing;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class ModelAndView {
     private String viewName;
-    private Map<String, List<Object>> data = new HashMap<>();
+    private Map<String, Object> data = new HashMap<>();
 
-    public ModelAndView(String viewName, Map<String, List<Object>> data) {
+    public ModelAndView(String viewName, Map<String, Object> data) {
         this.viewName = viewName;
         this.data = data;
     }
@@ -29,19 +30,24 @@ public class ModelAndView {
         this.viewName = viewName;
     }
 
-    public Map<String, List<Object>> getData() {
+    public Map<String, Object> getData() {
         return data;
     }
 
-    public void setData(Map<String, List<Object>> data) {
+    public void setData(Map<String, Object> data) {
         this.data = data;
     }
 
-    public void addData(String name, List<Object> value) {
+    public void addData(String name, Object value) {
         this.data.put(name, value);
     }
 
+    @SuppressWarnings("unchecked")
     public void addDataToList(String name, Object value) {
-        this.data.computeIfAbsent(name, k -> new java.util.ArrayList<>()).add(value);
+        Object existing = this.data.computeIfAbsent(name, k -> new ArrayList<>());
+        if (!(existing instanceof List)) {
+            throw new IllegalStateException("La clé '" + name + "' n'est pas une liste");
+        }
+        ((List<Object>) existing).add(value);
     }
 }

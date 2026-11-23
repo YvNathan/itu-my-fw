@@ -338,7 +338,7 @@ public class RequestControllerServlet extends HttpServlet {
             return;
         }
 
-        for (Entry<String, List<Object>> entry : mv.getData().entrySet()) {
+        for (Entry<String, Object> entry : mv.getData().entrySet()) {
             req.setAttribute(entry.getKey(), entry.getValue());
         }
 
