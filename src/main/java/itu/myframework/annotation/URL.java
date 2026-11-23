@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 import itu.myframework.routing.RequestMethod;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
+@Target({ElementType.TYPE, ElementType.METHOD})
 public @interface URL {
     String value();
 

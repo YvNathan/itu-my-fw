@@ -49,7 +49,12 @@ public class Scanner {
         if (!directory.exists())
             return classes;
 
-        for (File file : directory.listFiles()) {
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return classes;
+        }
+
+        for (File file : files) {
             if (file.isDirectory()) {
                 classes.addAll(findAnnotatedClasses(file,
                         joinPackage(packageName, file.getName().replace(".class", "")), classLoader, annotationClass));
@@ -84,12 +89,17 @@ public class Scanner {
         List<Class<?>> controllers = getAnnotatedClasses(packageName, Controller.class);
 
         for (Class<?> ctrl : controllers) {
+            String classPrefix = "";
+            if (ctrl.isAnnotationPresent(itu.myframework.annotation.URL.class)) {
+                classPrefix = ctrl.getAnnotation(itu.myframework.annotation.URL.class).value();
+            }
+            
             List<Method> annotatedMethods = findAnnotatedMethods(ctrl, itu.myframework.annotation.URL.class);
 
             for (Method method : annotatedMethods) {
                 itu.myframework.annotation.URL urlAnnotation = method.getAnnotation(itu.myframework.annotation.URL.class);
 
-                String urlValue = urlAnnotation.value();
+                String urlValue = normalizePath(classPrefix, urlAnnotation.value());
                 RequestMethod requestMethod = urlAnnotation.requestMethod();
                 URLMethod urlMethod = new URLMethod(urlValue, requestMethod);
 
@@ -101,6 +111,18 @@ public class Scanner {
             }
         }
 
+    }
+
+    private static String normalizePath(String prefix, String path){
+        String combined = (prefix == null ? "" : prefix ) + (path == null ? "" : path);
+        combined = combined.replaceAll("/+", "/");
+        if (!combined.startsWith("/")) {
+            combined = "/" + combined;
+        }
+        if (combined.length() > 1 && combined.endsWith("/")) {
+            combined = combined.substring(0, combined.length() - 1);
+        }
+        return combined;
     }
 
     private static String joinPackage(String packageName, String name) {
