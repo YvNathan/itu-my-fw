@@ -1,6 +1,9 @@
 package itu.myframework.binding;
 
 import java.util.List;
+
+import com.google.gson.Gson;
+
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -16,6 +19,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.Part;
 
 public class Binder {
+    private static final Gson gson = new Gson();
+
     private static List<FileUpload> bindFiles(HttpServletRequest req, String name) throws Exception {
         List<FileUpload> files = new ArrayList<>();
 
@@ -102,6 +107,14 @@ public class Binder {
     }
 
     public static Object bindModel(HttpServletRequest req, Type type, String prefix) throws ServletException {
+        if (isJson(req)) {
+            try {
+                return gson.fromJson(req.getReader(), type);
+            } catch (Exception e) {
+                throw new ServletException("JSON invalide pour le modèle : " + type.getTypeName(), e);
+            }
+        }
+
         if (isListType(type)) {
             if (prefix == null || prefix.isEmpty()) {
                 throw new ServletException("Préfixe requis pour une liste : @RequestModel(\"nom\")");
@@ -272,6 +285,11 @@ public class Binder {
         }
 
         throw new IllegalArgumentException("Type non supporté");
+    }
+
+    private static boolean isJson(HttpServletRequest req){
+        String contentType = req.getContentType();
+        return contentType != null && contentType.toLowerCase().contains("application/json");
     }
 
     private static boolean isMultipart(HttpServletRequest req) {
