@@ -8,6 +8,7 @@ import java.util.Map;
 public class ModelAndView {
     private String viewName;
     private Map<String, Object> data = new HashMap<>();
+    private Map<String, String> headers = new HashMap<>();
 
     public ModelAndView(String viewName, Map<String, Object> data) {
         this.viewName = viewName;
@@ -49,5 +50,13 @@ public class ModelAndView {
             throw new IllegalStateException("La clé '" + name + "' n'est pas une liste");
         }
         ((List<Object>) existing).add(value);
+    }
+
+    public void addHeader(String name, String value){
+        this.headers.put(name, value);
+    }
+    
+    public Map<String, String> getHeaders(){
+        return this.headers;
     }
 }

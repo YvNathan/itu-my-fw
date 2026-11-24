@@ -27,6 +27,7 @@ import itu.myframework.config.AppProperties;
 import itu.myframework.routing.MethodMapping;
 import itu.myframework.routing.ModelAndView;
 import itu.myframework.routing.RequestMethod;
+import itu.myframework.routing.ResponseEntity;
 import itu.myframework.routing.URLMethod;
 import itu.myframework.session.Session;
 import jakarta.servlet.ServletConfig;
@@ -79,8 +80,8 @@ public class RequestControllerServlet extends HttpServlet {
         String url = req.getRequestURI().substring(contextPath.length());
         if (url.isEmpty()) {
             url = "/";
-        } else if (url.length() > 1 && url.endsWith("/"))  {
-            url = url.substring(0, url.length() -1);
+        } else if (url.length() > 1 && url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
         }
 
         RequestMethod requestMethod = RequestMethod.valueOf(req.getMethod());
@@ -150,6 +151,20 @@ public class RequestControllerServlet extends HttpServlet {
                     req.changeSessionId();
                 }
 
+                int status = HttpServletResponse.SC_OK;
+                boolean isEmptyEntity = false;
+                if (result instanceof ResponseEntity<?> entity) {
+                    status = entity.getStatus();
+                    res.setStatus(status);
+                    applyHeadersMap(entity.getHeaders(), res);
+                    result = entity.getBody();
+                    isEmptyEntity = (result == null);
+                }
+
+                if (status == HttpServletResponse.SC_NO_CONTENT || isEmptyEntity) {
+                    return;
+                }
+
                 if (annotatedMethod.isAnnotationPresent(APIMethod.class)) {
                     handleApiResponse(result, res);
                     return;
@@ -165,11 +180,12 @@ public class RequestControllerServlet extends HttpServlet {
                 throw new ServletException("Impossible d'exécuter la méthode : " + cause, cause);
             }
         } else {
-            boolean isStatic = !url.startsWith("/WEB-INF/") && !url.endsWith("/") && getServletContext().getResource(url) != null;
+            boolean isStatic = !url.startsWith("/WEB-INF/") && !url.endsWith("/")
+                    && getServletContext().getResource(url) != null;
 
             if (isStatic) {
                 getServletContext().getNamedDispatcher("default").forward(req, res);
-                return ;
+                return;
             }
 
             if ("true".equalsIgnoreCase(AppProperties.get("app.debug"))) {
@@ -331,8 +347,23 @@ public class RequestControllerServlet extends HttpServlet {
         printer.flush();
     }
 
+    private void applyHeadersMap(Map<String, String> headers, HttpServletResponse res) {
+        if (headers == null) {
+            return;
+        }
+        for (Entry<String, String> header : headers.entrySet()) {
+            if (header.getKey() != null && header.getValue() != null) {
+                res.setHeader(header.getKey(), header.getValue());
+            }
+        }
+    }
+
     private void handleViewReponse(ModelAndView mv, HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
+        if (mv.getHeaders() != null) {
+            applyHeadersMap(mv.getHeaders(), res);
+        }
+
         if (mv.getViewName() != null && mv.getViewName().startsWith("redirect:")) {
             res.sendRedirect(req.getContextPath() + mv.getViewName().substring("redirect:".length()));
             return;
