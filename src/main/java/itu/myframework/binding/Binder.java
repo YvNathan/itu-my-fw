@@ -3,13 +3,18 @@ package itu.myframework.binding;
 import java.util.List;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 
 import itu.myframework.annotation.RequestParam;
@@ -19,7 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.Part;
 
 public class Binder {
-    private static final Gson gson = new Gson();
+    private static final Gson gson = new GsonBuilder().setDateFormat("yyyy-MM-dd").create();
 
     private static List<FileUpload> bindFiles(HttpServletRequest req, String name) throws Exception {
         List<FileUpload> files = new ArrayList<>();
@@ -262,7 +267,10 @@ public class Binder {
     private static boolean isSimpleType(Class<?> type) {
         return type == String.class || type == int.class || type == Integer.class
                 || type == double.class || type == Double.class || type == long.class || type == Long.class
-                || type == boolean.class || type == Boolean.class || type == LocalDate.class;
+                || type == BigDecimal.class
+                || type == boolean.class || type == Boolean.class || type == LocalDate.class
+                || type == LocalDateTime.class || type == Enum.class
+                || type == Date.class || type == Timestamp.class;
     }
 
     public static Object resolveParamType(String param, Class<?> type) {
@@ -277,17 +285,36 @@ public class Binder {
         if (type == double.class || type == Double.class) {
             return Double.parseDouble(param);
         }
+        if (type == BigDecimal.class) {
+            return new BigDecimal(param);
+        }
         if (type == boolean.class || type == Boolean.class) {
             return param.equalsIgnoreCase("true") || param.equalsIgnoreCase("on");
         }
         if (type == LocalDate.class) {
             return LocalDate.parse(param);
         }
+        if (type == LocalDateTime.class) {
+            return LocalDateTime.parse(param);
+        }
+        if (type == Date.class) {
+            return Date.valueOf(param);
+        }
+        if (type == Timestamp.class) {
+            String value = param.trim().replace("T", " ");
+            if (value.length() == 16) {
+                value += ":00";
+            }
+            return Timestamp.valueOf(param);
+        }
+        if (type.isEnum()) {
+            return Enum.valueOf((Class<Enum>) type, param);
+        }
 
         throw new IllegalArgumentException("Type non supporté");
     }
 
-    private static boolean isJson(HttpServletRequest req){
+    private static boolean isJson(HttpServletRequest req) {
         String contentType = req.getContentType();
         return contentType != null && contentType.toLowerCase().contains("application/json");
     }
