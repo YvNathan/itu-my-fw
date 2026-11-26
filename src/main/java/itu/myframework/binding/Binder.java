@@ -273,6 +273,7 @@ public class Binder {
                 || type == Date.class || type == Timestamp.class;
     }
 
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public static Object resolveParamType(String param, Class<?> type) {
         if (type == String.class)
             return param;
